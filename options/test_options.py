@@ -19,5 +19,10 @@ class TestOptions(BaseOptions):
         parser.set_defaults(model='test')
         # To avoid cropping, the load_size should be the same as crop_size
         parser.set_defaults(load_size=parser.get_default('crop_size'))
+        
+        # Additional from 2ws-i2i
+        parser.add_argument('--ntest', type=int,
+                            default=float("inf"), help='# of test examples.')
+        
         self.isTrain = False
         return parser
