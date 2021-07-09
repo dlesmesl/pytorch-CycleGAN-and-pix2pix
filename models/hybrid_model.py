@@ -154,7 +154,9 @@ class HybridModel(BaseModel):
         """
         # Here the definition might change because the discriminator is relativistic
         pred_real = netD(real)
+        loss_D_real = self.criterionGAN(pred_real, True)
         pred_fake = netD(fake.detach())
+        loss_D_fake = self.criterionGAN(pred_fake, False)
         if(self.opt.loss_case == 'rel_bce'):
             loss_D = self.criterionGAN(pred_real - pred_fake, True)
         else:
