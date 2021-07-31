@@ -60,18 +60,18 @@ if __name__ == '__main__':
             model.set_input(data)         # unpack data from dataset and apply preprocessing
             model.optimize_parameters()   # calculate loss functions, get gradients, update network weights
             
-            # adding the new "unaligned" epoch when hybrid
-            if (opt.model == 'hybrid'):
-                for i, data in enumerate(datdataset_unaligned):
-                    iter_start_time = time.time()
-                    if total_iters % opt.print_freq == 0:
-                        t_data = iter_start_time - iter_data_time
-                        
-                    total_iters += opt.batch_size
-                    epoch_iter += opt.batch_size
-                    model.set_input(data)
-                    model.optimize_parameters(mode='unaligned')
-            # ----------------------------------------------------
+        # adding the new "unaligned" epoch when hybrid
+        if (opt.model == 'hybrid'):
+            for i, data in enumerate(datdataset_unaligned):
+                iter_start_time = time.time()
+                if total_iters % opt.print_freq == 0:
+                    t_data = iter_start_time - iter_data_time
+                    
+                total_iters += opt.batch_size
+                epoch_iter += opt.batch_size
+                model.set_input(data)
+                model.optimize_parameters(mode='unaligned')
+        # ----------------------------------------------------
 
             if total_iters % opt.display_freq == 0:   # display images on visdom and save images to a HTML file
                 save_result = total_iters % opt.update_html_freq == 0

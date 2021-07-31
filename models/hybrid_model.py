@@ -104,6 +104,8 @@ class HybridModel(BaseModel):
             # If two networks are updated at the same time, you can use itertools.chain to group them. See cycle_gan_model.py for an example.
             self.lambda_L1 = self.opt.lambda_L1
             
+            self.optimizers = []
+            
             self.optimizer_G = torch.optim.Adam(itertools.chain(
                 self.netG_A.parameters(), self.netG_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizer_D = torch.optim.Adam(itertools.chain(
@@ -113,6 +115,8 @@ class HybridModel(BaseModel):
         
             # ------------important---------------
             # Will skip temporary in lines 79 - 81
+            # self.loss_D_real = 0.0
+            # self.loss_D_fake = 0.0
             # ------------------------------------
              
         # Our program will automatically call <model.setup> to define schedulers, load networks, and print networks
@@ -139,9 +143,9 @@ class HybridModel(BaseModel):
         # self.idt_B = self.netG_B(self.real_A)  # G_B(A) identity?
 
         #if(mode == 'unaligned'):
-        # with torch.no_grad():  # CyclaGAN uses grad
-        self.rec_A = self.netG_B(self.fake_B)  # G_B(G_A(A))
-        self.rec_B = self.netG_A(self.fake_A)  # G_A(G_B(B))
+        with torch.no_grad():  # CycleGAN uses grad
+            self.rec_A = self.netG_B(self.fake_B)  # G_B(G_A(A))
+            self.rec_B = self.netG_A(self.fake_A)  # G_A(G_B(B))
             
     def backward_D_basic(self, netD, real, fake):
         """Calculate GAN loss for the discriminator
@@ -255,22 +259,24 @@ class HybridModel(BaseModel):
         self.loss_G = self.loss_G_GAN + self.loss_cycle + self.loss_G_idt
         if mode == 'aligned':
             self.loss_G += self.loss_G_L1
+            
+        self.loss_G.backward()
 
     def optimize_parameters(self, mode='aligned'):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
         # forward
         self.forward(mode)  # compute fake images and reconstruction images.
         
+        # D_A and D_B
+        self.set_requires_grad([self.netD_A, self.netD_B], True)
+        self.optimizer_D.zero_grad()   # set D_A and D_B's gradients to zero
+        self.backward_D_A(mode)      # calculate gradients for D_A
+        self.backward_D_B(mode)      # calculate gradients for D_B
+        self.optimizer_D.step()  # update D_A and D_B's weights
+        
         # G_A and G_B
         # Ds require no gradients when optimizing Gs
         self.set_requires_grad([self.netD_A, self.netD_B], False)
         self.optimizer_G.zero_grad()  # set G_A and G_B's gradients to zero
-        self.backward_G()             # calculate gradients for G_A and G_B
+        self.backward_G(mode)             # calculate gradients for G_A and G_B
         self.optimizer_G.step()       # update G_A and G_B's weights
-        
-        # D_A and D_B
-        self.set_requires_grad([self.netD_A, self.netD_B], True)
-        self.optimizer_D.zero_grad()   # set D_A and D_B's gradients to zero
-        self.backward_D_A()      # calculate gradients for D_A
-        self.backward_D_B()      # calculate gradients for D_B
-        self.optimizer_D.step()  # update D_A and D_B's weights
