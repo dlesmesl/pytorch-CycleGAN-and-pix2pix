@@ -1,5 +1,0 @@
-training
-    python train.py --model hybrid --dataroot ../../Pictures/ws-i2i_Experiments/small_test/paired_data/ --dataroot_unaligned ../../Pictures/ws-i2i_Experiments/small_test/unpaired_data/Experiment_10-10_9.7.21 --name short_test_50-50 --direction AtoB --gpu_ids 0 --n_epochs 5 --n_epochs_decay 5 --save_epoch_freq 10 --save_latest_freq 10 --preprocess scale_width_and_crop --load_size 768 --crop_size 256
-
-test
-    python test.py --dataroot ../../Pictures/Own_datasets/NIR-CFP_pix2pix/paired/ --name short_test --model hybrid --direction AtoB --preprocess scale_width --load_size 768

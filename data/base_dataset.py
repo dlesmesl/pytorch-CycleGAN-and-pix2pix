@@ -61,6 +61,7 @@ class BaseDataset(data.Dataset, ABC):
 
 
 def get_params(opt, size):
+    flip = random.random() > 0.5
     w, h = size
     new_h = h
     new_w = w
@@ -69,13 +70,22 @@ def get_params(opt, size):
     elif opt.preprocess == 'scale_width_and_crop':
         new_w = opt.load_size
         new_h = opt.load_size * h // w
+        
+    if opt.nir2cfp:
+        im_size = (new_w, new_h)
+        tile_size = (opt.crop_size, opt.crop_size)
+        center_tile = __center_cords(tile_size, im_size)
+        edge_tile = random.sample(__edges_cords(tile_size, im_size), 1)[0]
+        
+        out = {'center': {'crop_pos': center_tile, 'flip': flip},
+               'edge': {'crop_pos': edge_tile, 'flip': flip}}
+    else:
+        x = random.randint(0, np.maximum(0, new_w - opt.crop_size))
+        y = random.randint(0, np.maximum(0, new_h - opt.crop_size))
+        
+        out = {'crop_pos': (x, y), 'flip': flip}
 
-    x = random.randint(0, np.maximum(0, new_w - opt.crop_size))
-    y = random.randint(0, np.maximum(0, new_h - opt.crop_size))
-
-    flip = random.random() > 0.5
-
-    return {'crop_pos': (x, y), 'flip': flip}
+    return out
 
 
 def get_transform(opt, params=None, grayscale=False, method=Image.BICUBIC, convert=True):
@@ -155,3 +165,24 @@ def __print_size_warning(ow, oh, w, h):
               "(%d, %d). This adjustment will be done to all images "
               "whose sizes are not multiples of 4" % (ow, oh, w, h))
         __print_size_warning.has_printed = True
+        
+def __edges_cords(tile_size, im_size):
+    """Returns a dictionary of all the possible points to get a tile in the edge"""
+    tw, th = tile_size
+    w, h = im_size
+    out_set = set()
+    for y in range(h - th):
+        out_set.add((0, y))
+        out_set.add((w - tw, y))
+    for x in range(w - tw):
+        out_set.add((x, 0))
+        out_set.add((x, h - th))
+    return out_set
+
+def __center_cords(tile_size, im_size):
+    """Returns the coordinates to select the center tile of an image"""
+    tw, th = tile_size
+    w, h = im_size
+    x = (w - tw) // 2
+    y = (h - th) // 2
+    return (x, y)

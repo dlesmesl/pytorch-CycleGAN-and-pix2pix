@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 from torch.nn import init
 import functools
+from torch.nn.modules import module
+from torch.nn.modules.container import ModuleList
 from torch.optim import lr_scheduler
 
 
@@ -154,6 +156,12 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         net = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     elif netG == 'unet_256':
         net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
+    elif netG == 'own_unet':
+        net = Unet(input_nc, output_nc, 3, ngf, norm_layer)
+    elif netG == 'single_unet':
+        net = SingleUNet(input_nc, output_nc, 5, ngf, norm_layer)
+    elif netG == 'casnet':
+        net = CasNet(input_nc, output_nc, 7, ngf, norm_layer)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -521,7 +529,6 @@ class UnetSkipConnectionBlock(nn.Module):
                                         padding=1, bias=use_bias)
             down = [downrelu, downconv, downnorm]
             up = [uprelu, upconv, upnorm]
-
             if use_dropout:
                 model = down + [submodule] + up + [nn.Dropout(0.5)]
             else:
@@ -535,6 +542,156 @@ class UnetSkipConnectionBlock(nn.Module):
         else:   # add skip connections
             return torch.cat([x, self.model(x)], 1)
 
+
+class Unet(nn.Module):
+    def __init__(self, in_ch, out_ch, num_downs=7, ngf=64, norm_layer=nn.BatchNorm2d):
+        super().__init__()
+        channel_lvls = [in_ch] + [ngf*i for i in range(1, num_downs+1)]
+        channel_lvls.reverse()
+        for i, out_channel in enumerate(channel_lvls[:-1], 1):
+            in_channel = channel_lvls[i]
+            # true when in last iteration
+            last = in_channel == channel_lvls[-1]
+            # last = False
+            if i == 1:
+                self.model = self.UBlock(
+                    in_channel, out_channel, norm_layer, None, last)
+            else:
+                self.model = self.UBlock(
+                    in_channel, out_channel, norm_layer, self.model, last)
+
+    def forward(self, x):
+        return self.model(x)
+
+    class UBlock(nn.Module):
+        def __init__(self, in_ch, out_ch, norm_layer, submodule=None, last=False):
+            super().__init__()
+            down_layer = nn.MaxPool2d(2, 2)
+            up_layer = nn.Upsample(scale_factor=2)
+
+            if not submodule:
+                submodule = self.ConvBlock(out_ch, out_ch, norm_layer)
+
+            self.submodule = nn.Sequential(
+                down_layer,
+                submodule,
+                up_layer)
+
+            self.down_conv = self.ConvBlock(in_ch, out_ch, norm_layer)
+            self.up_conv = self.ConvBlock(
+                out_ch * 2, in_ch, norm_layer, last=last)
+
+        class ConvBlock(nn.Module):
+            def __init__(self, in_ch, out_ch, norm, k=3, s=1, p=1, last=False, n_convs=2, conv_type=nn.Conv2d):
+                super().__init__()
+                if n_convs == 2:
+                    if in_ch > out_ch:
+                        inner_ch = in_ch // 2
+                    else:
+                        inner_ch = out_ch
+                        
+                if last:
+                    final_layer = nn.Tanh()
+                else:
+                    final_layer = nn.Sequential(
+                        nn.ReLU(True),
+                        norm(out_ch))
+
+                self.conv = nn.Sequential(
+                    conv_type(in_ch, inner_ch, k, s, p, bias=False),
+                    nn.ReLU(True),
+                    norm(inner_ch),
+                    conv_type(inner_ch, inner_ch, k, s, p, bias=False),
+                    nn.ReLU(True),
+                    norm(inner_ch),
+                    conv_type(inner_ch, out_ch, k, s, p, bias=False),
+                    final_layer)
+
+            def forward(self, x):
+                return self.conv(x)
+
+        def forward(self, x):
+            x_down = self.down_conv(x)
+            x = self.submodule(x_down)
+            x = torch.cat([x_down, x], 1)
+            return self.up_conv(x)
+
+
+class SingleUNet(nn.Module):
+    def __init__(self, in_ch, out_ch, num_downs=7, ngf=64, norm_layer=nn.BatchNorm2d):
+        super().__init__()
+        channel_lvls = [in_ch] + [ngf*i for i in range(1, num_downs+1)]
+        channel_lvls.reverse()
+        for i, out_channel in enumerate(channel_lvls[:-1], 1):
+            in_channel = channel_lvls[i]
+            # true when in last iteration
+            last = in_channel == channel_lvls[-1]
+            if i == 1:
+                self.model = self.UBlock(
+                    in_channel, out_channel, norm_layer, None, last)
+            else:
+                self.model = self.UBlock(
+                    in_channel, out_channel, norm_layer, self.model, last, i)
+
+        if out_ch != in_ch:
+            self.model = nn.Sequential(
+                self.model,
+                nn.Conv2d(in_ch, out_ch, 3, 1, 1)
+            )
+        
+    def forward(self, x):
+        return self.model(x)
+    
+    class UBlock(nn.Module):
+        def __init__(self, in_ch, out_ch, norm_layer, submodule=None, last=False, dept=0, k=4, s=2, p=1):
+            super().__init__()
+            self.last = last
+            if self.last:
+                final_layer = nn.Tanh()
+            else:
+                final_layer = nn.Sequential(
+                    norm_layer(in_ch),
+                    nn.ReLU(True))
+                
+            if not dept:
+                const = 1
+            else:
+                const = 2
+            
+            downconv = nn.Sequential(
+                nn.Conv2d(in_ch, out_ch, k, s, p, bias=False),
+                norm_layer(out_ch),
+                nn.ReLU(True))
+            upconv = nn.Sequential(
+                nn.ConvTranspose2d(out_ch * const, in_ch, k, s, p, bias=False),
+                final_layer)
+            
+            if not submodule:
+                self.model = nn.Sequential(
+                    downconv,
+                    upconv)
+            else:
+                self.model = nn.Sequential(
+                    downconv,
+                    submodule,
+                    upconv)
+            
+        def forward(self, x):
+            if not self.last:
+                return torch.cat([x, self.model(x)], 1)
+            else:
+                return self.model(x)
+        
+
+
+class CasNet(nn.Module):
+    def __init__(self, in_ch, out_ch, num_downs=7, ngf=64, norm_layer=nn.BatchNorm2d, num_nets=2):
+        super().__init__()
+        nets = [SingleUNet(in_ch, out_ch, num_downs, ngf, norm_layer) for _ in range(num_nets)]
+        self.model = nn.Sequential(*nets)
+        
+    def forward(self, x):
+        return self.model(x)
 
 class NLayerDiscriminator(nn.Module):
     """Defines a PatchGAN discriminator"""
