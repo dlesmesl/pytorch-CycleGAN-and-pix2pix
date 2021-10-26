@@ -68,24 +68,28 @@ class AlignedDataset(BaseDataset):
             center_params = transform_params['center']
             edge_params = transform_params['edge']
             
-            center_transform = get_transform(
+            A_center_transform = get_transform(
                 self.opt, center_params, grayscale=(self.input_nc == 1))
-            edge_transform = get_transform(
+            A_edge_transform = get_transform(
                 self.opt, edge_params, grayscale=(self.input_nc == 1))
+            B_center_transform = get_transform(
+                self.opt, center_params, grayscale=(self.output_nc == 1))
+            B_edge_transform = get_transform(
+                self.opt, edge_params, grayscale=(self.output_nc == 1))
             
-            A_center = center_transform(A)
-            A_edge = edge_transform(A)
-            B_center = center_transform(B)
-            B_edge = edge_transform(B)
+            A_center = A_center_transform(A)
+            A_edge = A_edge_transform(A)
+            B_center = B_center_transform(B)
+            B_edge = B_edge_transform(B)
             
             output = {'A_center': A_center, 'A_edge': A_edge, 'A_paths': AB_path,
                       'B_center': B_center, 'B_edge': B_edge, 'B`_paths': AB_path}
             
             # mask addition
             mask_center_transform = get_transform(
-                self.opt, center_transform, convert=False)
+                self.opt, center_params, convert=False)
             mask_edge_transform = get_transform(
-                self.opt, edge_transform, convert=False)
+                self.opt, edge_params, convert=False)
             
             mask_center = transforms.functional.pil_to_tensor(
                 mask_center_transform(mask))
@@ -96,13 +100,11 @@ class AlignedDataset(BaseDataset):
             output['mask_edge'] = mask_edge
             
         else:
-            transform = get_transform(self.opt, transform_params, grayscale=(self.input_nc == 1))
-            # B_transform = get_transform(self.opt, transform_params, grayscale=(self.output_nc == 1))
+            A_transform = get_transform(self.opt, transform_params, grayscale=(self.input_nc == 1))
+            B_transform = get_transform(self.opt, transform_params, grayscale=(self.output_nc == 1))
 
-            # A = A_transform(A)
-            # B = B_transform(B)
-            A = transform(A)
-            B = transform(B)
+            A = A_transform(A)
+            B = B_transform(B)
             
             output = {'A': A, 'B': B, 'A_paths': AB_path, 'B_paths': AB_path}
         

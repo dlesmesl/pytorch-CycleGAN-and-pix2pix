@@ -1,3 +1,4 @@
+from random import sample
 import torch
 import itertools
 from util.image_pool import ImagePool
@@ -5,6 +6,7 @@ from .base_model import BaseModel
 from . import networks
 from torchvision.transforms import Grayscale
 from .custom_losses import MaskedL1, BackgroundColor
+import os
 
 class HybridModel(BaseModel):
     def name(self):
@@ -33,7 +35,7 @@ class HybridModel(BaseModel):
             parser.add_argument('--lambda_B', type=float, default=10.0,
                                 help='weight for cycle loss (B -> A -> B)')
             parser.add_argument('--lambda_identity', type=float,
-                                default=0.5, help='weight for identity loss')
+                                default=0.5, help='weight for identity loss') # current value: 0.5
             
             # iddentity loss, 0.5 for cyclegan, 10 for hybrid
             
@@ -129,6 +131,13 @@ class HybridModel(BaseModel):
             self.mask = input['mask'].to(self.device)
         # get image paths
         self.image_paths = input['A_paths' if AtoB else 'B_paths']
+        
+    def is_labeled_sample(self):
+        """Returns a boolean to tells if current sample is labeled
+            Note: currently only used for paired data"""
+        sample_id = os.path.basename(self.image_paths[0])
+        sample_id = int(sample_id.split('_')[0])
+        return sample_id in self.labeled_ids
 
     def forward(self):
         """Run forward pass. This will be called by both functions <optimize_parameters> and <test>."""
@@ -254,6 +263,13 @@ class HybridModel(BaseModel):
             
         # L1 loss for paired data
         if mode == 'aligned':
+            # if self.is_labeled_sample():
+            #     lambda_L1 = self.opt.lambda_L1 * 2
+            #     lambda_L1_out = self.opt.lambda_L1_out * 2
+            # else:
+            #     lambda_L1 = self.opt.lambda_L1
+            #     lambda_L1_out = self.opt.lambda_L1_out
+                
             if gray_l1:
                 fake_A = Grayscale()(self.fake_A)
                 fake_B = Grayscale()(self.fake_B)
@@ -273,7 +289,7 @@ class HybridModel(BaseModel):
                 self.loss_G_L1_A = loss_L1_A_in + loss_L1_A_out
                 
                 loss_L1_B_in, loss_L1_B_out = self.criterionL1(
-                    fake_B, real_B, mask, self.opt.input_nc)
+                    fake_B, real_B, mask, self.opt.output_nc)
                 loss_L1_B_in *= lambda_L1 * percent
                 loss_L1_B_out *= lambda_L1_out * percent
                 

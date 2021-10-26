@@ -71,7 +71,9 @@ def get_params(opt, size):
         new_w = opt.load_size
         new_h = opt.load_size * h // w
         
-    if opt.nir2cfp:
+    nir2cfp = opt.nir2cfp
+    # nir2cfp = False
+    if nir2cfp:
         im_size = (new_w, new_h)
         tile_size = (opt.crop_size, opt.crop_size)
         center_tile = __center_cords(tile_size, im_size)

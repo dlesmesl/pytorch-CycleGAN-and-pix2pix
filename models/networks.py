@@ -548,48 +548,57 @@ class Unet(nn.Module):
         super().__init__()
         channel_lvls = [in_ch] + [ngf*i for i in range(1, num_downs+1)]
         channel_lvls.reverse()
-        for i, out_channel in enumerate(channel_lvls[:-1], 1):
+        for i, inner_ch in enumerate(channel_lvls[:-1], 1):
             in_channel = channel_lvls[i]
             # true when in last iteration
             last = in_channel == channel_lvls[-1]
             # last = False
             if i == 1:
                 self.model = self.UBlock(
-                    in_channel, out_channel, norm_layer, None, last)
+                    in_channel, inner_ch, out_ch, norm_layer, None, last)
             else:
                 self.model = self.UBlock(
-                    in_channel, out_channel, norm_layer, self.model, last)
+                    in_channel, inner_ch, out_ch, norm_layer, self.model, last)
 
     def forward(self, x):
         return self.model(x)
 
     class UBlock(nn.Module):
-        def __init__(self, in_ch, out_ch, norm_layer, submodule=None, last=False):
+        def __init__(self, in_ch, inner_ch, out_ch, norm_layer, submodule=None, last=False):
             super().__init__()
             down_layer = nn.MaxPool2d(2, 2)
             up_layer = nn.Upsample(scale_factor=2)
 
             if not submodule:
-                submodule = self.ConvBlock(out_ch, out_ch, norm_layer)
+                submodule = self.ConvBlock(inner_ch, inner_ch, norm_layer)
 
             self.submodule = nn.Sequential(
                 down_layer,
                 submodule,
                 up_layer)
 
-            self.down_conv = self.ConvBlock(in_ch, out_ch, norm_layer)
-            self.up_conv = self.ConvBlock(
-                out_ch * 2, in_ch, norm_layer, last=last)
+            self.down_conv = self.ConvBlock(in_ch, inner_ch, norm_layer)
+            if last:
+                self.up_conv = self.ConvBlock(
+                    inner_ch * 2, out_ch, norm_layer, last=last)
+            else:
+                self.up_conv = self.ConvBlock(
+                    inner_ch * 2, in_ch, norm_layer)
+                
+        def forward(self, x):
+            x_down = self.down_conv(x)
+            x = self.submodule(x_down)
+            x = torch.cat([x_down, x], 1)
+            return self.up_conv(x)
 
         class ConvBlock(nn.Module):
-            def __init__(self, in_ch, out_ch, norm, k=3, s=1, p=1, last=False, n_convs=2, conv_type=nn.Conv2d):
+            def __init__(self, in_ch, out_ch, norm, k=3, s=1, p=1, last=False, conv_type=nn.Conv2d):
                 super().__init__()
-                if n_convs == 2:
-                    if in_ch > out_ch:
-                        inner_ch = in_ch // 2
-                    else:
-                        inner_ch = out_ch
-                        
+                if in_ch > out_ch:
+                    inner_ch = in_ch // 2
+                else:
+                    inner_ch = out_ch
+                    
                 if last:
                     final_layer = nn.Tanh()
                 else:
@@ -609,12 +618,6 @@ class Unet(nn.Module):
 
             def forward(self, x):
                 return self.conv(x)
-
-        def forward(self, x):
-            x_down = self.down_conv(x)
-            x = self.submodule(x_down)
-            x = torch.cat([x_down, x], 1)
-            return self.up_conv(x)
 
 
 class SingleUNet(nn.Module):

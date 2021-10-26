@@ -42,6 +42,9 @@ class BaseModel(ABC):
         self.optimizers = []
         self.image_paths = []
         self.metric = 0  # used for learning rate policy 'plateau'
+        
+        # add label data
+        self.labeled_ids = None
 
     @staticmethod
     def modify_commandline_options(parser, is_train):
@@ -233,3 +236,8 @@ class BaseModel(ABC):
             if net is not None:
                 for param in net.parameters():
                     param.requires_grad = requires_grad
+
+    def include_label_data(self, set_ids):
+        """"Stores the IDs of those asmples with label data of interest"""
+        if self.opt.label_file:
+            self.labeled_ids = set_ids

@@ -7,8 +7,8 @@ class MaskedL1(nn.Module):
         super().__init__()
     
     def forward(self, input_im, target_im, mask, num_ch):
-        if num_ch == 3:
-            mask = torch.cat([mask, mask, mask], dim=1)
+        if num_ch > 1:
+            mask = torch.cat([mask for _ in range(num_ch)], dim=1)
         neg_mask = torch.logical_not(mask)
         
         diff = torch.abs(input_im - target_im)

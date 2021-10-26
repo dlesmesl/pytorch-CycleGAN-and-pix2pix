@@ -38,7 +38,9 @@ class TrainOptions(BaseOptions):
 
         # # additional options
         parser.add_argument('--best_epoch', type=int, default=0,
-                            help='Save the networks with the best results in inverbals of the specified number')
+                            help='Save the networks with the best results in intervals of the specified number')
+        parser.add_argument('--label_file', type=str, default=None,
+                            help='path of .csv file with label information using image IDs')
 
         self.isTrain = True
         return parser

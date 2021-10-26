@@ -24,6 +24,7 @@ from data import create_dataset
 from models import create_model
 from util.visualizer import Visualizer
 import numpy as np
+from util.util import get_label_pigment
 
 if __name__ == '__main__':
     opt = TrainOptions().parse()   # get training options
@@ -31,9 +32,14 @@ if __name__ == '__main__':
     # dataset = [] # empty aligned dataset
     dataset_size = len(dataset)    # get the number of images in the dataset.
     print('The number of training images = %d' % dataset_size)
-
+    
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
+    
+    if opt.label_file:
+        pigmented_samples = get_label_pigment(opt.label_file)
+        model.include_label_data(pigmented_samples)
+
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
     # opt.model = 'pollo'
@@ -43,6 +49,7 @@ if __name__ == '__main__':
         opt.dataset_mode = 'unaligned'
         opt.dataroot = opt.dataroot_unaligned
         datdataset_unaligned = create_dataset(opt)
+        # datdataset_unaligned = []
         datdataset_unaligned_size = len(datdataset_unaligned)
         print('The number of training unaligned images = %d' % datdataset_unaligned_size)
     # ---------------------------------------------------------
@@ -80,8 +87,11 @@ if __name__ == '__main__':
             total_iters += opt.batch_size
             epoch_iter += opt.batch_size
             
-            if opt.nir2cfp:
-                flag = (epoch % 0 + i % 0) % 0 # flag to decide if we choose center of edge tile
+            nir2cfp = opt.nir2cfp
+            # nir2cfp = False
+            if nir2cfp:
+                # flag = ((epoch % 2) + (i % 2)) % 2 # flag to decide if we choose center of edge tile
+                flag = 0 # use to always give central patch to the paired setting
                 path = data['A_paths'] # same for A and B
                 if flag == 0: # center tile
                     A = data['A_center']

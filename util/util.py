@@ -4,6 +4,7 @@ import torch
 import numpy as np
 from PIL import Image
 import os
+import pandas as pd
 
 
 def tensor2im(input_image, imtype=np.uint8):
@@ -101,3 +102,11 @@ def mkdir(path):
     """
     if not os.path.exists(path):
         os.makedirs(path)
+        
+
+def get_label_pigment(csv_file):
+    """Returns a set of samples IDs with pigments."""
+    label_df = pd.read_csv(csv_file)
+    label_df = label_df.drop(
+        label_df[label_df.pigment != 'Definitely Present'].index)
+    return set(label_df.lead_id)
