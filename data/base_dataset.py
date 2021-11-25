@@ -7,6 +7,7 @@ import numpy as np
 import torch.utils.data as data
 from PIL import Image
 import torchvision.transforms as transforms
+import torchvision.transforms.functional as functional
 from abc import ABC, abstractmethod
 
 
@@ -62,6 +63,10 @@ class BaseDataset(data.Dataset, ABC):
 
 def get_params(opt, size):
     flip = random.random() > 0.5
+    if opt.isTrain and random.random() > 0.5:
+        rotation = random.randint(-10, 10)
+    else:
+        rotation = 0
     w, h = size
     new_h = h
     new_w = w
@@ -79,13 +84,13 @@ def get_params(opt, size):
         center_tile = __center_cords(tile_size, im_size)
         edge_tile = random.sample(__edges_cords(tile_size, im_size), 1)[0]
         
-        out = {'center': {'crop_pos': center_tile, 'flip': flip},
-               'edge': {'crop_pos': edge_tile, 'flip': flip}}
+        out = {'center': {'crop_pos': center_tile, 'flip': flip, 'rotation': rotation},
+               'edge': {'crop_pos': edge_tile, 'flip': flip, 'rotation': rotation}}
     else:
         x = random.randint(0, np.maximum(0, new_w - opt.crop_size))
         y = random.randint(0, np.maximum(0, new_h - opt.crop_size))
         
-        out = {'crop_pos': (x, y), 'flip': flip}
+        out = {'crop_pos': (x, y), 'flip': flip, 'rotation': rotation}
 
     return out
 
@@ -114,6 +119,9 @@ def get_transform(opt, params=None, grayscale=False, method=Image.BICUBIC, conve
             transform_list.append(transforms.RandomHorizontalFlip())
         elif params['flip']:
             transform_list.append(transforms.Lambda(lambda img: __flip(img, params['flip'])))
+    
+    if params and 'rotation' in params.keys():
+        transform_list.append(transforms.Lambda(lambda img: __rotate(img, params['rotation'])))
 
     if convert:
         transform_list += [transforms.ToTensor()]
@@ -156,6 +164,11 @@ def __crop(img, pos, size):
 def __flip(img, flip):
     if flip:
         return img.transpose(Image.FLIP_LEFT_RIGHT)
+    return img
+
+def __rotate(img, rotation):
+    if rotation != 0:
+        return functional.rotate(img, rotation)
     return img
 
 

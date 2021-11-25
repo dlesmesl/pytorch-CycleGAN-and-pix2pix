@@ -24,32 +24,23 @@ from data import create_dataset
 from models import create_model
 from util.visualizer import Visualizer
 import numpy as np
-from util.util import get_label_pigment
 
 if __name__ == '__main__':
     opt = TrainOptions().parse()   # get training options
     dataset = create_dataset(opt)  # create a dataset given opt.dataset_mode and other options
-    # dataset = [] # empty aligned dataset
     dataset_size = len(dataset)    # get the number of images in the dataset.
     print('The number of training images = %d' % dataset_size)
     
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
-    
-    if opt.label_file:
-        pigmented_samples = get_label_pigment(opt.label_file)
-        model.include_label_data(pigmented_samples)
-
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
-    # opt.model = 'pollo'
     
     # creating the unaligned dataset for hybrid training
     if opt.model == 'hybrid':
         opt.dataset_mode = 'unaligned'
         opt.dataroot = opt.dataroot_unaligned
         datdataset_unaligned = create_dataset(opt)
-        # datdataset_unaligned = []
         datdataset_unaligned_size = len(datdataset_unaligned)
         print('The number of training unaligned images = %d' % datdataset_unaligned_size)
     # ---------------------------------------------------------
@@ -64,7 +55,6 @@ if __name__ == '__main__':
         iter_data_time = time.time()    # timer for data loading per iteration
         epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch
         visualizer.reset()              # reset the visualizer: make sure it saves the results to HTML at least once every epoch
-        # model.update_learning_rate()    # update learning rates in the beginning of every epoch.
         
         # adding the new "unaligned" epoch when hybrid
         if (opt.model == 'hybrid'):
@@ -78,7 +68,6 @@ if __name__ == '__main__':
                 model.set_input(data, mode='unaligned')
                 model.optimize_parameters(mode='unaligned')
         # ----------------------------------------------------
-        
         for i, data in enumerate(dataset):  # inner loop within one epoch
             iter_start_time = time.time()  # timer for computation per iteration
             if total_iters % opt.print_freq == 0:
@@ -88,7 +77,6 @@ if __name__ == '__main__':
             epoch_iter += opt.batch_size
             
             nir2cfp = opt.nir2cfp
-            # nir2cfp = False
             if nir2cfp:
                 # flag = ((epoch % 2) + (i % 2)) % 2 # flag to decide if we choose center of edge tile
                 flag = 0 # use to always give central patch to the paired setting

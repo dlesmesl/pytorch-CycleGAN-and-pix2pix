@@ -63,7 +63,6 @@ class AlignedDataset(BaseDataset):
         
         selective_flag = self.opt.nir2cfp
         # selective_flag = False # use if want to use the original dataset implementation
-        
         if selective_flag:
             center_params = transform_params['center']
             edge_params = transform_params['edge']

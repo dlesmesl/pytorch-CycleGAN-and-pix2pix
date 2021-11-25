@@ -5,7 +5,7 @@ from util.image_pool import ImagePool
 from .base_model import BaseModel
 from . import networks
 from torchvision.transforms import Grayscale
-from .custom_losses import MaskedL1, BackgroundColor
+from .custom_losses import MaskedL1, MaskedL2
 import os
 
 class HybridModel(BaseModel):
@@ -100,10 +100,12 @@ class HybridModel(BaseModel):
             self.criterionIdt = torch.nn.L1Loss() # Identity loss
             self.criterionCycle = torch.nn.L1Loss() # Cycle loss
             if self.opt.nir2cfp or self.opt.mask:
-                self.criterionL1 = MaskedL1() # paired loss with mask
-                self.colorloss = BackgroundColor()
+                if self.opt.L2:
+                    self.criterionPaired = MaskedL2()
+                else:
+                    self.criterionPaired = MaskedL1() # paired loss with mask
             else:
-                self.criterionL1 = torch.nn.L1Loss()  # Paired loss
+                self.criterionPaired = torch.nn.L1Loss()  # Paired loss
             
             # define and initialize optimizers. You can define one optimizer for each network.
             # If two networks are updated at the same time, you can use itertools.chain to group them. See cycle_gan_model.py for an example.
@@ -131,13 +133,6 @@ class HybridModel(BaseModel):
             self.mask = input['mask'].to(self.device)
         # get image paths
         self.image_paths = input['A_paths' if AtoB else 'B_paths']
-        
-    def is_labeled_sample(self):
-        """Returns a boolean to tells if current sample is labeled
-            Note: currently only used for paired data"""
-        sample_id = os.path.basename(self.image_paths[0])
-        sample_id = int(sample_id.split('_')[0])
-        return sample_id in self.labeled_ids
 
     def forward(self):
         """Run forward pass. This will be called by both functions <optimize_parameters> and <test>."""
@@ -263,13 +258,6 @@ class HybridModel(BaseModel):
             
         # L1 loss for paired data
         if mode == 'aligned':
-            # if self.is_labeled_sample():
-            #     lambda_L1 = self.opt.lambda_L1 * 2
-            #     lambda_L1_out = self.opt.lambda_L1_out * 2
-            # else:
-            #     lambda_L1 = self.opt.lambda_L1
-            #     lambda_L1_out = self.opt.lambda_L1_out
-                
             if gray_l1:
                 fake_A = Grayscale()(self.fake_A)
                 fake_B = Grayscale()(self.fake_B)
@@ -281,14 +269,14 @@ class HybridModel(BaseModel):
                 
             if self.opt.nir2cfp or self.opt.mask:
                 mask = self.mask
-                loss_L1_A_in, loss_L1_A_out = self.criterionL1(
+                loss_L1_A_in, loss_L1_A_out = self.criterionPaired(
                     fake_A, real_A, mask, self.opt.input_nc)
                 loss_L1_A_in *= lambda_L1 * percent
                 loss_L1_A_out *= lambda_L1_out * percent
                 
                 self.loss_G_L1_A = loss_L1_A_in + loss_L1_A_out
                 
-                loss_L1_B_in, loss_L1_B_out = self.criterionL1(
+                loss_L1_B_in, loss_L1_B_out = self.criterionPaired(
                     fake_B, real_B, mask, self.opt.output_nc)
                 loss_L1_B_in *= lambda_L1 * percent
                 loss_L1_B_out *= lambda_L1_out * percent
@@ -296,9 +284,9 @@ class HybridModel(BaseModel):
                 self.loss_G_L1_B = loss_L1_B_in + loss_L1_B_out
                 
             else:
-                self.loss_G_L1_B = self.criterionL1(
+                self.loss_G_L1_B = self.criterionPaired(
                     fake_B, real_B) * lambda_L1
-                self.loss_G_L1_A = self.criterionL1(
+                self.loss_G_L1_A = self.criterionPaired(
                     fake_A, real_A) * lambda_L1
 
             self.loss_G_L1 = self.loss_G_L1_A + self.loss_G_L1_B

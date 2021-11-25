@@ -237,7 +237,3 @@ class BaseModel(ABC):
                 for param in net.parameters():
                     param.requires_grad = requires_grad
 
-    def include_label_data(self, set_ids):
-        """"Stores the IDs of those asmples with label data of interest"""
-        if self.opt.label_file:
-            self.labeled_ids = set_ids
